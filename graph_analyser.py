@@ -49,7 +49,7 @@ def classify_pattern_ml(values, temperature=None):
         results.append("none")
     return results
 
-def export_pdf_report(dataframe, time_col, value_col, temp_col, classification):
+def export_pdf_report(dataframe, time_col, value_cols, temp_col, classification):
     from fpdf import FPDF
     import matplotlib.pyplot as plt
     import tempfile
@@ -58,10 +58,12 @@ def export_pdf_report(dataframe, time_col, value_col, temp_col, classification):
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt="Structural Graph Report", ln=True)
-    pdf.cell(200, 10, txt=f"Detected Pattern(s): {', '.join(classification)}", ln=True)
+    for sensor, result in classification.items():
+        pdf.cell(200, 10, txt=f"{sensor}: {', '.join(result)}", ln=True)
 
     fig, ax = plt.subplots()
-    ax.plot(dataframe[time_col], dataframe[value_col], label='Sensor')
+    for col in value_cols:
+        ax.plot(dataframe[time_col], dataframe[col], label=col)
     if temp_col != 'None':
         ax2 = ax.twinx()
         ax2.plot(dataframe[time_col], dataframe[temp_col], color='orange', alpha=0.5, label='Temperature')
@@ -90,31 +92,36 @@ if uploaded_file:
         st.subheader("🧭 Map Columns")
 
         col_date = st.selectbox("Select the date/time column", df.columns)
-        col_sensor = st.selectbox("Select the sensor output column", df.columns)
+        col_sensors = st.multiselect("Select one or more sensor output columns (e.g., x, y, z)", df.columns)
         col_temp = st.selectbox("Select the temperature column (optional)", ['None'] + list(df.columns))
 
         try:
             df[col_date] = pd.to_datetime(df[col_date], errors='coerce')
             df = df.dropna(subset=[col_date])
             df = df.sort_values(col_date)
-            df[col_sensor] = pd.to_numeric(df[col_sensor], errors='coerce')
+            for col in col_sensors:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
             if col_temp != 'None':
                 df[col_temp] = pd.to_numeric(df[col_temp], errors='coerce')
 
             fig, ax = plt.subplots()
-            ax.plot(df[col_date], df[col_sensor], label='Sensor Value')
+            for col in col_sensors:
+    ax.plot(df[col_date], df[col], label=col)
             if col_temp != 'None':
                 ax2 = ax.twinx()
                 ax2.plot(df[col_date], df[col_temp], color='orange', alpha=0.5, label='Temperature')
             ax.set_title("Sensor Data Over Time")
             st.pyplot(fig)
 
-            classification_result = classify_pattern_ml(df[col_sensor], df[col_temp] if col_temp != 'None' else None)
+            classification_result = {}
+for col in col_sensors:
+    classification_result[col] = classify_pattern_ml(df[col], df[col_temp] if col_temp != 'None' else None)
             st.subheader("🤖 Pattern Classification")
-            st.write("📊", ", ".join(classification_result))
+            for sensor, result in classification_result.items():
+    st.write(f"📊 {sensor}: {', '.join(result)}")
 
             if st.button("Export PDF Report"):
-                pdf_path = export_pdf_report(df, col_date, col_sensor, col_temp, classification_result)
+                pdf_path = export_pdf_report(df, col_date, col_sensors, col_temp, classification_result)
                 with open(pdf_path, "rb") as pdf_file:
                     st.download_button(label="Download PDF", data=pdf_file, file_name="graph_report_v3.pdf", mime="application/pdf")
 
