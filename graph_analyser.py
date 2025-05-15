@@ -1,4 +1,8 @@
-
+try:
+    import cv2
+    st.success("✅ OpenCV is installed.")
+except ImportError:
+    st.error("❌ OpenCV (cv2) is NOT installed.")
 import streamlit as st
 import pandas as pd
 import numpy as np
