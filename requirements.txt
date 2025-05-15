@@ -6,3 +6,5 @@ pyexcel
 pyexcel-xls
 numpy
 fpdf
+Pillow
+opencv-python
