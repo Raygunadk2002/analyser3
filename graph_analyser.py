@@ -7,10 +7,9 @@ import pyexcel
 import os
 
 st.set_page_config(layout="wide")
-st.title("📐 Structural Movement Graph Analyser v2")
+st.title("📐 Structural Movement Graph Analyser v3")
 
-# Version indicator
-st.info("🧠 VERSION: v2 — Improved XLS handling + ML scaffolding")
+st.info("🧠 VERSION: v3 — Mapping columns + preview safe rendering")
 
 uploaded_file = st.file_uploader("Upload an Excel file (.xls or .xlsx)", type=["xls", "xlsx"])
 
@@ -78,37 +77,46 @@ def export_pdf_report(dataframe, time_col, value_col, temp_col, classification):
 if uploaded_file:
     df = safe_read_excel(uploaded_file)
     if df is not None and not df.empty:
-        st.success("File loaded.")
-        st.dataframe(df.head())
+        df = df.loc[:, ~df.columns.duplicated()]
+        df = df.dropna(how="all", axis=1)
 
-        time_col = st.selectbox("Time column", df.columns)
-        value_col = st.selectbox("Sensor value column", df.columns)
-        temp_col = st.selectbox("Temperature column (optional)", ['None'] + list(df.columns))
+        st.success("File loaded.")
+        try:
+            st.dataframe(df.head())
+        except Exception as e:
+            st.warning("Could not preview table. Error likely from incompatible cell types.")
+            st.text(f"Preview error: {e}")
+
+        st.subheader("🧭 Map Columns")
+
+        col_date = st.selectbox("Select the date/time column", df.columns)
+        col_sensor = st.selectbox("Select the sensor output column", df.columns)
+        col_temp = st.selectbox("Select the temperature column (optional)", ['None'] + list(df.columns))
 
         try:
-            df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
-            df = df.dropna(subset=[time_col])
-            df = df.sort_values(time_col)
-            df[value_col] = pd.to_numeric(df[value_col], errors='coerce')
-            if temp_col != 'None':
-                df[temp_col] = pd.to_numeric(df[temp_col], errors='coerce')
+            df[col_date] = pd.to_datetime(df[col_date], errors='coerce')
+            df = df.dropna(subset=[col_date])
+            df = df.sort_values(col_date)
+            df[col_sensor] = pd.to_numeric(df[col_sensor], errors='coerce')
+            if col_temp != 'None':
+                df[col_temp] = pd.to_numeric(df[col_temp], errors='coerce')
 
             fig, ax = plt.subplots()
-            ax.plot(df[time_col], df[value_col], label='Sensor')
-            if temp_col != 'None':
+            ax.plot(df[col_date], df[col_sensor], label='Sensor Value')
+            if col_temp != 'None':
                 ax2 = ax.twinx()
-                ax2.plot(df[time_col], df[temp_col], color='orange', alpha=0.5)
-            ax.set_title("Sensor Value Over Time")
+                ax2.plot(df[col_date], df[col_temp], color='orange', alpha=0.5, label='Temperature')
+            ax.set_title("Sensor Data Over Time")
             st.pyplot(fig)
 
-            classification_result = classify_pattern_ml(df[value_col], df[temp_col] if temp_col != 'None' else None)
-            st.subheader("ML-Based Pattern Classification")
+            classification_result = classify_pattern_ml(df[col_sensor], df[col_temp] if col_temp != 'None' else None)
+            st.subheader("🤖 Pattern Classification")
             st.write("📊", ", ".join(classification_result))
 
             if st.button("Export PDF Report"):
-                pdf_path = export_pdf_report(df, time_col, value_col, temp_col, classification_result)
+                pdf_path = export_pdf_report(df, col_date, col_sensor, col_temp, classification_result)
                 with open(pdf_path, "rb") as pdf_file:
-                    st.download_button(label="Download Report", data=pdf_file, file_name="graph_report_v2.pdf", mime="application/pdf")
+                    st.download_button(label="Download PDF", data=pdf_file, file_name="graph_report_v3.pdf", mime="application/pdf")
 
         except Exception as e:
             st.error(f"Processing error: {e}")
